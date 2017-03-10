@@ -20,7 +20,7 @@ from utils import *
 
 n = 10000
 seq_len = 30
-h = 128
+h = 32
 num_tags = 1000
 batch_size = 32
 

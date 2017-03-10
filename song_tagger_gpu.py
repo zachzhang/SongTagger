@@ -19,12 +19,20 @@ import sys
 from utils import *
 
 n = 10000
-seq_len = 100
+seq_len = 30
 h = 128
 num_tags = 1000
+batch_size = 32
+
+
+dtype = torch.cuda.FloatTensor
 
 # load all lyric data into pandas dataframe
-df = pd.read_csv('lyric_data.csv', index_col=0)
+df = pd.read_csv('lyric_data.csv', index_col=0)#.iloc[0:200000]
+#df = pd.read_csv('lyric_data_small.csv', index_col=0)
+
+
+
 
 # Sometimes the API returns an error message rather than actual lyrics. This removes it
 bad_song = df['lyrics'].value_counts().index[0]
@@ -62,31 +70,55 @@ tok = vect.build_analyzer()
 # Load glove vectors for word embedding
 vocab, glove = load_glove(vocab)
 
+
 # Convert text to sequence input
 features = df['lyrics'].apply(lambda x: sent2seq(x, vocab, tok, seq_len))
 features = np.array(list(features))
 
+np.save('features.npy',features)
+np.save('y.npy',y)
+np.save('glove.npy',glove)
+
+
+quit()
+
+features = torch.from_numpy(features)
+y = torch.from_numpy(y)
+
+train_idx = features.size()[0] * 8 / 10
+
+print(type(features))
+
 # Train loader
-train_dataset = torch.utils.data.TensorDataset(torch.from_numpy(features[:150000]), torch.from_numpy(y[:150000]))
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
+train_dataset = torch.utils.data.TensorDataset(features[:train_idx ], y[:train_idx ])
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True,pin_memory=True)
 
 # Test Loader
-test_dataset = torch.utils.data.TensorDataset(torch.from_numpy(features[150000:]), torch.from_numpy(y[150000:]))
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=True)
+test_dataset = torch.utils.data.TensorDataset(features[train_idx :], y[train_idx :])
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True,pin_memory=True)
+
+pickle.dump(train_dataset, open('train_loader.p','wb'))
+pickle.dump(test_dataset, open('test_loader.p','wb'))
+pickle.dump(glove,open('glove.p','wb'))
+
+print('done')
 
 # Create the Model
 embed = nn.Embedding(glove.shape[0], 50, padding_idx=0)
 embed.weight = nn.Parameter(torch.from_numpy(glove))
 
-
 model = nn.LSTM(50, h, 1, batch_first=True)
 
 output_layer = nn.Linear(h, num_tags)
 
+embed.cuda()
+model.cuda()
+output_layer.cuda()
+
 params = list(model.parameters()) + list(embed.parameters()) + list(output_layer.parameters())
 
 opt = optim.Adam(params, lr=0.001)
-bce = torch.nn.BCELoss()
+bce = torch.nn.BCELoss().cuda()
 
 
 def train():
@@ -95,10 +127,13 @@ def train():
     i = 0
     for data, target in train_loader:
 
-        data, target = Variable(data), Variable(target.float())
+        target= target.float()
+        data = data.cuda()
+        target = target.cuda()
+        data, target = Variable(data), Variable(target)
 
-        h0 = Variable(torch.zeros(1, data.size()[0], h))
-        c0 = Variable(torch.zeros(1, data.size()[0], h))
+        h0 = Variable(torch.zeros(1, data.size()[0], h).cuda())
+        c0 = Variable(torch.zeros(1, data.size()[0], h).cuda())
 
         opt.zero_grad()
 
@@ -127,10 +162,14 @@ def test():
     avg_fscore = 0
 
     for data, target in test_loader:
-        data, target = Variable(data), Variable(target.float())
+        
+        target = target.float().cuda()
+        data = data.cuda()
 
-        h0 = Variable(torch.zeros(1, data.size()[0], h))
-        c0 = Variable(torch.zeros(1, data.size()[0], h))
+        data, target = Variable(data), Variable(target)
+
+        h0 = Variable(torch.zeros(1, data.size()[0], h).cuda())
+        c0 = Variable(torch.zeros(1, data.size()[0], h).cuda())
 
         opt.zero_grad()
 
@@ -142,17 +181,18 @@ def test():
 
         loss = bce(y_hat, target)
 
-        predicted = y_hat.data.numpy().flatten()
-        correct = target.data.numpy().flatten()
+        #predicted = y_hat.data.numpy().flatten()
+        #correct = target.data.numpy().flatten()
 
-        score = roc_auc_score(correct, predicted)
+        #score = roc_auc_score(correct, predicted)
 
         avg_loss += loss
-        avg_fscore += score
+        #avg_fscore += score
 
     print("averge loss: ", (avg_loss / len(test_loader)).data[0], " average f score: ", avg_fscore / len(test_loader))
 
 
 for i in range(10):
     train()
-    test()
+    #test()
+

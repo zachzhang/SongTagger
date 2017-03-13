@@ -17,131 +17,80 @@ from sklearn.metrics import roc_auc_score
 import time
 import sys
 from utils import *
+from networks import *
 
 n = 10000
 seq_len = 30
-h = 128
+h = 32
 num_tags = 1000
-batch_size = 32
+batch_size = 64
 
 
-dtype = torch.cuda.FloatTensor
+print("loading data")
+start = time.time()
+glove = np.load('glove.npy')
 
-# load all lyric data into pandas dataframe
-df = pd.read_csv('lyric_data.csv', index_col=0)#.iloc[0:200000]
-#df = pd.read_csv('lyric_data_small.csv', index_col=0)
+#features = np.load('features.npy')[0:1000]
+#y = np.load('y.npy')[0:1000]
 
-
-
-
-# Sometimes the API returns an error message rather than actual lyrics. This removes it
-bad_song = df['lyrics'].value_counts().index[0]
-df[df['lyrics'] == bad_song] = ''
-
-# only take the ones that we have data for
-df.fillna('', inplace=True)
-df = df[df['lyrics'] != '']
-
-# List of list of tags for each example
-tags = [clean_tags(raw) for raw in list(df['tags'])]
-
-# list of tuples of (tag, frequency) in desending order
-tf = tag_freq(tags)
-
-# Choose which tags to restrict model too
-important_tags = [x[0] for x in tf[0:num_tags]]
-important_tags = dict(zip(important_tags, range(len(important_tags))))
-
-# maps each of the tags int 'tags' to an int index
-indices = tag2index(tags, important_tags)
-
-# Convert indices to binary vectors of tags
-y = np.zeros((len(indices), num_tags))
-for i, tags in enumerate(indices):
-    for tag in tags:
-        y[i, tag] = 1
-
-# Build vocabulary and tokenizer
-vect = CountVectorizer(max_features=n, stop_words='english')
-vect.fit(df['lyrics'])
-vocab = vect.vocabulary_
-tok = vect.build_analyzer()
-
-# Load glove vectors for word embedding
-vocab, glove = load_glove(vocab)
-
-
-# Convert text to sequence input
-features = df['lyrics'].apply(lambda x: sent2seq(x, vocab, tok, seq_len))
-features = np.array(list(features))
-
-np.save('features.npy',features)
-np.save('y.npy',y)
-np.save('glove.npy',glove)
-
-
-quit()
+features = np.load('features.npy')
+y = np.load('y.npy')
 
 features = torch.from_numpy(features)
 y = torch.from_numpy(y)
 
-train_idx = features.size()[0] * 8 / 10
+train_idx = int(np.floor(features.size()[0] * 8 / 10))
 
-print(type(features))
+print(train_idx)
 
-# Train loader
-train_dataset = torch.utils.data.TensorDataset(features[:train_idx ], y[:train_idx ])
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True,pin_memory=True)
+train_loader = torch.utils.data.TensorDataset(features[:train_idx ], y[:train_idx ])
+test_loader = torch.utils.data.TensorDataset(features[train_idx :], y[train_idx :])
 
-# Test Loader
-test_dataset = torch.utils.data.TensorDataset(features[train_idx :], y[train_idx :])
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True,pin_memory=True)
+train_loader = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(test_loader, batch_size=batch_size, shuffle=True)
 
-pickle.dump(train_dataset, open('train_loader.p','wb'))
-pickle.dump(test_dataset, open('test_loader.p','wb'))
-pickle.dump(glove,open('glove.p','wb'))
+#train_loader = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle=True,pin_memory=True)
+#test_loader = torch.utils.data.DataLoader(test_loader, batch_size=batch_size, shuffle=True,pin_memory=True)
 
-print('done')
 
-# Create the Model
-embed = nn.Embedding(glove.shape[0], 50, padding_idx=0)
-embed.weight = nn.Parameter(torch.from_numpy(glove))
+print(time.time() - start)
+print("creating model")
 
-model = nn.LSTM(50, h, 1, batch_first=True)
 
-output_layer = nn.Linear(h, num_tags)
+#model = LSTM_Model(h,glove,num_tags)
+model = CNN(glove,num_tags,seq_len)
 
-embed.cuda()
-model.cuda()
-output_layer.cuda()
+params = model.parameters()
 
-params = list(model.parameters()) + list(embed.parameters()) + list(output_layer.parameters())
+#print(len(list(params)))
 
-opt = optim.Adam(params, lr=0.001)
-bce = torch.nn.BCELoss().cuda()
+opt = optim.Adam(list(model.conv1.parameters()), lr=0.001)
+#opt = optim.Adam(list(model.output_layer.parameters()), lr=0.001)
+
+bce = torch.nn.BCELoss()
 
 
 def train():
+
+    model.train()
+
     start = time.time()
     avg_loss = 0
-    i = 0
+    i = 1
     for data, target in train_loader:
 
         target= target.float()
-        data = data.cuda()
-        target = target.cuda()
-        data, target = Variable(data), Variable(target)
 
-        h0 = Variable(torch.zeros(1, data.size()[0], h).cuda())
-        c0 = Variable(torch.zeros(1, data.size()[0], h).cuda())
+        #data = data.cuda()
+        #target = target.cuda()
+
+        data, target = Variable(data), Variable(target)
 
         opt.zero_grad()
 
-        E = embed(data)
+        #data = Variable(torch.ones(data.size()[0],50,30))
 
-        z, _ = model(E, (h0, c0))
-
-        y_hat = F.sigmoid(output_layer(z[:, -1, :]))
+        y_hat = model.forward(data)
 
         loss = bce(y_hat, target)
 
@@ -152,32 +101,28 @@ def train():
         avg_loss += loss
         i += 1
 
-        if i % 200 == 0:
+        if i % 20 == 0:
             print("averge loss: ", (avg_loss / i).data[0], " time elapsed:", time.time() - start)
 
 
 
 def test():
+
+    model.eval()
+
     avg_loss = 0
     avg_fscore = 0
 
     for data, target in test_loader:
         
-        target = target.float().cuda()
-        data = data.cuda()
+        #target = target.float().cuda()
+        #data = data.cuda()
 
         data, target = Variable(data), Variable(target)
 
-        h0 = Variable(torch.zeros(1, data.size()[0], h).cuda())
-        c0 = Variable(torch.zeros(1, data.size()[0], h).cuda())
-
         opt.zero_grad()
 
-        E = embed(data)
-
-        z, _ = model(E, (h0, c0))
-
-        y_hat = F.sigmoid(output_layer(z[:, -1, :]))
+        y_hat = model.forward(data)
 
         loss = bce(y_hat, target)
 

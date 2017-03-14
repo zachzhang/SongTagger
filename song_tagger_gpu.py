@@ -17,8 +17,10 @@ import time
 import sys
 from utils import *
 from networks import *
+from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import hamming_loss
 
-import theano.sandbox.cuda.basic_ops as sbcuda
+#import theano.sandbox.cuda.basic_ops as sbcuda
 
 n = 50000
 seq_len = 100
@@ -26,13 +28,13 @@ h = 32
 num_tags = 1000
 batch_size = 64
 
-gpu = True
+gpu = False
 
 print("loading data")
 start = time.time()
 glove = np.load('glove.npy')
 
-features = np.load('features.npy')[:,40:]
+features = np.load('features.npy')
 y = np.load('y.npy')
 
 features = torch.from_numpy(features)
@@ -40,21 +42,11 @@ y = torch.from_numpy(y).float()
 glove = torch.from_numpy(glove)
 
 
-
-print(sys.getsizeof(features))
-print(sys.getsizeof(y))
-print(sys.getsizeof(glove))
-#features = features.half()
-
-
-
 train_idx = int(np.floor(features.size()[0] * 8 / 10))
 
 train_loader = torch.utils.data.TensorDataset(features[:train_idx ], y[:train_idx ])
 test_loader = torch.utils.data.TensorDataset(features[train_idx :], y[train_idx :])
 
-
-'''
 if not gpu:
 
     train_loader = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle=True)
@@ -63,10 +55,6 @@ else:
 
     train_loader = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle=True,pin_memory=True)
     test_loader = torch.utils.data.DataLoader(test_loader, batch_size=batch_size, shuffle=True,pin_memory=True)
-'''
-
-train_loader = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle=True,pin_memory=True)
-test_loader = torch.utils.data.DataLoader(test_loader, batch_size=batch_size, shuffle=True,pin_memory=True)
 
 
 print(time.time() - start)
@@ -75,7 +63,6 @@ print("creating model")
 
 #model = LSTM_Model(h,glove,num_tags)
 model = CNN(glove ,y.size()[1],features.size()[1])
-print(sys.getsizeof(model))
 
 params = model.parameters()
 
@@ -98,13 +85,6 @@ def train():
     avg_loss = 0
     i = 1
     for data, target in train_loader:
-
-        #data = data.half()
-        #target = target.half()
-
-        #if gpu:
-            #data = data.cuda()
-            #target = target.cuda()
 
         data, target = Variable(data), Variable(target)
 
@@ -129,9 +109,7 @@ def train():
 
         if i % 400 == 0:
             print("averge loss: ", (avg_loss / i).data[0], " time elapsed:", time.time() - start)
-            print( "CUDA memory: "  ,sbcuda.cuda_ndarray.cuda_ndarray.mem_info()[0]/1024./1024/1024 )
-
-
+            #print( "CUDA memory: "  ,sbcuda.cuda_ndarray.cuda_ndarray.mem_info()[0]/1024./1024/1024 )
 
 def test():
 
@@ -139,6 +117,7 @@ def test():
 
     avg_loss = 0
     avg_fscore = 0
+    avg_ham = 0
 
     for data, target in test_loader:
 
@@ -155,16 +134,27 @@ def test():
         y_hat = y_hat.cpu()
         target = target.cpu()
 
-        predicted = y_hat.data.numpy().flatten()
+        correct = target.numpy().flatten()
+        predicted = y_hat.numpy().flatten()
 
-        correct = target.data.numpy().flatten()
+        precision, recall, thresholds = precision_recall_curve(correct, predicted)
+   
+        f_score = 2* precision * recall / (precision + recall)
+        
+        i_max = f_score.argmax()
+        
+        f_max = f_score[i_max]
+        
+        max_thresh  =  thresholds[i_max]
 
-        score = roc_auc_score(correct, predicted)
+        hamming = hamming_loss(y,y_hat > max_thresh)
 
         avg_loss += loss
-        avg_fscore += score
+        avg_fscore += f_max
+        avg_ham += hamming
 
-    print("averge loss: ", (avg_loss / len(test_loader)).data[0], " average f score: ", avg_fscore / len(test_loader))
+    print("averge loss: ", (avg_loss / len(test_loader)).data[0], " average f score: ", avg_fscore / len(test_loader),  \
+           " average hamming loss: ", avg_ham / len(test_loader  )
 
 
 for i in range(6):

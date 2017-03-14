@@ -1,18 +1,22 @@
 import pandas as pd
 import numpy as np
 from utils import *
+import pickle 
 from sklearn.feature_extraction.text import CountVectorizer
-
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import LinearSVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
-
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import hamming_loss
+import time
 
-n = 10000
+start =time.time()
+
+n = 20000
+
 num_tags = 1000
 
 #load all lyric data into pandas dataframe
@@ -51,25 +55,80 @@ X = vect.fit_transform(df['lyrics'])
 vocab = vect.vocabulary_
 tok = vect.build_analyzer()
 
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-model = OneVsRestClassifier(MultinomialNB()).fit(X,y)
+model = OneVsRestClassifier(MultinomialNB()).fit(X_train,y_train)
+#model = OneVsRestClassifier(MultinomialNB()).fit(X_train,y_train)
+#model = OneVsRestClassifier(LinearSVC()).fit(X_train,y_train)
 
-y_hat = model.predict_proba(X)
 
-correct = y.flatten()
-predicted = y_hat.flatten()
+y_hat = model.predict_proba(X_test)
 
-auc = roc_auc_score(correct, predicted)
+def evaluate(y,y_hat):
 
-precision, recall, thresholds = precision_recall_curve(correct, predicted)
-f_score = 2* precision * recall / (precision + recall)
+    correct = y.flatten()
+    predicted = y_hat.flatten()
 
-i_max = f_score.argmax()
-f_max = f_score[i_max]
-max_thresh  =  thresholds[i_max]
+    auc = roc_auc_score(correct, predicted)
 
-hamming = hamming_loss(y,y_hat > max_thresh)
+    precision, recall, thresholds = precision_recall_curve(correct, predicted)
+    f_score = 2* precision * recall / (precision + recall)
 
-print("AUC: " , auc)
-print("F Score: " , f_max)
-print("Hamming Loss: " , hamming)
+    i_max = f_score.argmax()
+    f_max = f_score[i_max]
+    max_thresh  =  thresholds[i_max]
+
+    hamming = hamming_loss(y,y_hat > max_thresh)
+
+    return auc,f_max,hamming,max_thresh
+
+auc_train,f_max_train,hamming_train , max_thresh_train = evaluate(y_train, model.predict_proba(X_train))
+
+auc_test,f_max_test,hamming_test , max_thresh_test = evaluate(y_test, model.predict_proba(X_test))
+
+print('total time: ' , time.time() - start)
+
+print('\nTRAINING ACCURACY')
+print("AUC: " , auc_train)
+print("F Score: " , f_max_train)
+print("Hamming Loss: " , hamming_train)
+
+print("\nTESTING ACCURACY")
+print("AUC: " , auc_test)
+print("F Score: " , f_max_test)
+print("Hamming Loss: " , hamming_test)
+
+
+#pickle.dump(model,open('nb.p','wb'))
+
+y_hat = model.predict_proba(X_test) > max_thresh_test
+
+tags = [clean_tags(raw) for raw in list(df['tags'])]
+
+index2tag = {v: k for k, v in important_tags.items()}
+
+num_out = 0
+
+for i in range(X_test.shape[0]):
+
+    if hamming_loss(y_test[i] , y_hat[i]) > hamming_test:
+    
+        print('LYRICS')
+        print(df['lyrics'].iloc[i])
+
+        print('TAGS')
+        print([ t for t in tags[i] if t in important_tags])
+
+        print('PREDICTED TAGS')
+
+        tag_idx = list(y_hat[i].nonzero()[0])
+        pred_tags = [ index2tag[x] for x in tag_idx  ]
+
+        print(pred_tags)
+
+
+        num_out +=1 
+
+        if num_out > 100:
+
+            break

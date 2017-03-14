@@ -18,8 +18,8 @@ import time
 import sys
 from utils import *
 
-n = 10000
-seq_len = 30
+n = 50000
+seq_len = 100
 h = 128
 num_tags = 1000
 batch_size = 32

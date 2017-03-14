@@ -43,8 +43,8 @@ class CNN(nn.Module):
 
         self.seq_len = seq_len
 
-        self.embed = nn.Embedding(glove.shape[0], glove.shape[1], padding_idx=0)
-        #self.embed.weight = nn.Parameter(torch.from_numpy(glove).float() , requires_grad=False)
+        self.embed = nn.Embedding(glove.size()[0], glove.size()[1], padding_idx=0)
+        self.embed.weight = nn.Parameter(glove)
 
         self.conv1 = nn.Conv1d(in_channels=50, out_channels=100, kernel_size=3)
         self.conv2 = nn.Conv1d(in_channels=100, out_channels=100, kernel_size=3)

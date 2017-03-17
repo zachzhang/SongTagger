@@ -22,7 +22,7 @@ from sklearn.metrics import hamming_loss
 
 #import theano.sandbox.cuda.basic_ops as sbcuda
 
-n = 50000
+n = 20000
 seq_len = 100
 h = 32
 num_tags = 1000
@@ -134,8 +134,8 @@ def test():
         y_hat = y_hat.cpu()
         target = target.cpu()
 
-        correct = target.numpy().flatten()
-        predicted = y_hat.numpy().flatten()
+        correct = target.data.numpy().flatten()
+        predicted = y_hat.data.numpy().flatten()
 
         precision, recall, thresholds = precision_recall_curve(correct, predicted)
    
@@ -153,8 +153,8 @@ def test():
         avg_fscore += f_max
         avg_ham += hamming
 
-    print("averge loss: ", (avg_loss / len(test_loader)).data[0], " average f score: ", avg_fscore / len(test_loader),  \
-           " average hamming loss: ", avg_ham / len(test_loader  )
+    print("averge loss: ", (avg_loss / len(test_loader)).data[0], " average f score: ", avg_fscore / len(test_loader), " average hamming loss: ", avg_ham / len(test_loader  ))
+
 
 
 for i in range(6):

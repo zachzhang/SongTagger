@@ -112,9 +112,15 @@ num_out = 0
 for i in range(X_test.shape[0]):
 
     if hamming_loss(y_test[i] , y_hat[i]) > hamming_test:
-    
+        
+        print('SONG')
+        print(df['artist'].iloc[i],df['song'].iloc[i])
+
         print('LYRICS')
         print(df['lyrics'].iloc[i])
+
+        print('BAG OF WORDS')
+        print(tok(df['lyrics'].iloc[i]))
 
         print('TAGS')
         print([ t for t in tags[i] if t in important_tags])
@@ -125,10 +131,11 @@ for i in range(X_test.shape[0]):
         pred_tags = [ index2tag[x] for x in tag_idx  ]
 
         print(pred_tags)
-
+        print()
+        print()
 
         num_out +=1 
 
-        if num_out > 100:
+        if num_out > 30:
 
             break

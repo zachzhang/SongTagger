@@ -65,6 +65,12 @@ class CNN(nn.Module):
         self.drop3 = nn.Dropout(p=0.5)
         self.drop4 = nn.Dropout(p=0.5)
 
+        self.bn1 = nn.BatchNorm1d(100)
+        self.bn2 = nn.BatchNorm1d(100)
+        self.bn3 = nn.BatchNorm1d(100)
+        self.bn4 = nn.BatchNorm1d(100)
+        self.bn5 = nn.BatchNorm1d(100)
+
         self.pool1 = nn.MaxPool1d(2)
         self.pool2 = nn.MaxPool1d(2)
         self.pool3 = nn.MaxPool1d(2)
@@ -72,8 +78,6 @@ class CNN(nn.Module):
 
 
         self.flat_dim = self.get_flat_dim()
-
-        print(self.flat_dim)
 
         self.output_layer = nn.Linear(self.flat_dim, num_out,bias=False)
 
@@ -87,10 +91,16 @@ class CNN(nn.Module):
 
         E = E.transpose(1, 2).contiguous()
 
-        h = self.pool1(self.drop1(F.relu(self.conv1(E))))
-        h = self.pool2(self.drop2(F.relu(self.conv2(h))))
-        h = self.pool3(self.drop3(F.relu(self.conv3(h))))
-        #h = self.pool4(self.drop4(F.relu(self.conv4(h))))
+        h = F.relu(self.bn1(self.conv1(E)))
+        h = F.relu(self.bn2(self.conv2(h)))
+        h = self.pool1(h)
+        h = F.relu(self.bn3(self.conv3(h)))
+        h = F.relu(self.bn4(self.conv4(h)))
+        h = self.pool2(h)
+        h = F.relu(self.bn5(self.conv5(h)))
+        h = self.pool3(h)
+
+        print(h.size()[1] , h.size()[2])
 
         return(h.size()[1] * h.size()[2])
 
@@ -101,10 +111,14 @@ class CNN(nn.Module):
 
         E = E.transpose(1, 2).contiguous()
 
-        h = self.pool1(self.drop1(F.relu(self.conv1(E))))
-        h = self.pool2(self.drop2(F.relu(self.conv2(h))))
-        h = self.pool3(self.drop3(F.relu(self.conv3(h))))
-        #h = self.pool4(self.drop4(F.relu(self.conv4(h))))
+        h = F.relu(self.bn1(self.conv1(E)))
+        h = F.relu(self.bn2(self.conv2(h)))
+        h = self.pool1(h)
+        h = F.relu(self.bn3(self.conv3(h)))
+        h = F.relu(self.bn4(self.conv4(h)))
+        h = self.pool2(h)
+        h = F.relu(self.bn5(self.conv5(h)))
+        h = self.pool3(h)
 
         h = h.view(-1,self.flat_dim)
 

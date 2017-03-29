@@ -18,11 +18,11 @@ import time
 import sys
 from utils import *
 
-n = 50000
-seq_len = 100
+n = 20000
+seq_len = 80
 h = 128
-num_tags = 1000
-batch_size = 32
+num_tags = 100
+batch_size = 64
 
 
 dtype = torch.cuda.FloatTensor

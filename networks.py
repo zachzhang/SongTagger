@@ -13,13 +13,17 @@ class LSTM_Model(nn.Module):
         super(LSTM_Model, self).__init__()
 
         self.h = h
+        self.embed = nn.Embedding(glove.size()[0], glove.size()[1], padding_idx=0 )
+        self.embed.weight = nn.Parameter(glove )
 
-        self.embed = nn.Embedding(glove.shape[0], glove.shape[1], padding_idx=0 )
-        self.embed.weight = nn.Parameter(torch.from_numpy(glove) )
-
-        self.lstm = nn.LSTM(glove.shape[1], h, 1, batch_first=True)
+        #self.lstm = nn.LSTM(glove.size()[1], h, 1, batch_first=True)
+        self.lstm = nn.GRU(glove.size()[1], h, 1, batch_first=True)
 
         self.output_layer = nn.Linear(h, num_out)
+
+        #self.params = list(self.embed.parameters()) + list(self.output_layer.parameters()) + list(self.lstm.parameters())
+        self.params =  list(self.output_layer.parameters()) + list(self.lstm.parameters())
+
 
 
     def forward(self,x):
@@ -28,8 +32,12 @@ class LSTM_Model(nn.Module):
         c0 = Variable(torch.zeros(1, x.size()[0], self.h))
 
         E = self.embed(x)
+        
 
-        z = self.lstm(E, (h0, c0))[0][:, -1, :]
+
+        #z = self.lstm(E, (h0, c0))[0][:, -1, :]
+        z = self.lstm(E, h0)[0][:, -1, :]
+
 
         y_hat = F.sigmoid(self.output_layer(z))
 
@@ -49,18 +57,27 @@ class CNN(nn.Module):
         self.conv1 = nn.Conv1d(in_channels=50, out_channels=100, kernel_size=3)
         self.conv2 = nn.Conv1d(in_channels=100, out_channels=100, kernel_size=3)
         self.conv3 = nn.Conv1d(in_channels=100, out_channels=100, kernel_size=3)
+        self.conv4 = nn.Conv1d(in_channels=100, out_channels=100, kernel_size=3)
+        self.conv5 = nn.Conv1d(in_channels=100, out_channels=100, kernel_size=3)
 
         self.drop1 = nn.Dropout(p=0.5)
         self.drop2 = nn.Dropout(p=0.5)
         self.drop3 = nn.Dropout(p=0.5)
+        self.drop4 = nn.Dropout(p=0.5)
 
         self.pool1 = nn.MaxPool1d(2)
         self.pool2 = nn.MaxPool1d(2)
         self.pool3 = nn.MaxPool1d(2)
+        self.pool4 = nn.MaxPool1d(2)
+
 
         self.flat_dim = self.get_flat_dim()
 
-        self.output_layer = nn.Linear(self.flat_dim, num_out)
+        print(self.flat_dim)
+
+        self.output_layer = nn.Linear(self.flat_dim, num_out,bias=False)
+
+        self.params = self.parameters()
 
     def get_flat_dim(self):
 
@@ -73,6 +90,7 @@ class CNN(nn.Module):
         h = self.pool1(self.drop1(F.relu(self.conv1(E))))
         h = self.pool2(self.drop2(F.relu(self.conv2(h))))
         h = self.pool3(self.drop3(F.relu(self.conv3(h))))
+        #h = self.pool4(self.drop4(F.relu(self.conv4(h))))
 
         return(h.size()[1] * h.size()[2])
 
@@ -86,6 +104,7 @@ class CNN(nn.Module):
         h = self.pool1(self.drop1(F.relu(self.conv1(E))))
         h = self.pool2(self.drop2(F.relu(self.conv2(h))))
         h = self.pool3(self.drop3(F.relu(self.conv3(h))))
+        #h = self.pool4(self.drop4(F.relu(self.conv4(h))))
 
         h = h.view(-1,self.flat_dim)
 

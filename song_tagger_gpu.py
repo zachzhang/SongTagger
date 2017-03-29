@@ -23,9 +23,9 @@ from sklearn.metrics import hamming_loss
 #import theano.sandbox.cuda.basic_ops as sbcuda
 
 n = 20000
-seq_len = 100
-h = 32
-num_tags = 1000
+seq_len = 80
+h = 128
+num_tags = 10
 batch_size = 64
 
 gpu = False
@@ -35,7 +35,7 @@ start = time.time()
 glove = np.load('glove.npy')
 
 features = np.load('features.npy')
-y = np.load('y.npy')
+y = np.load('y.npy')[:,0:10]
 
 features = torch.from_numpy(features)
 y = torch.from_numpy(y).float()
@@ -45,7 +45,8 @@ glove = torch.from_numpy(glove)
 train_idx = int(np.floor(features.size()[0] * 8 / 10))
 
 train_loader = torch.utils.data.TensorDataset(features[:train_idx ], y[:train_idx ])
-test_loader = torch.utils.data.TensorDataset(features[train_idx :], y[train_idx :])
+#test_loader = torch.utils.data.TensorDataset(features[train_idx :], y[train_idx :])
+test_loader = torch.utils.data.TensorDataset(features[:30000], y[:30000])
 
 if not gpu:
 
@@ -60,13 +61,25 @@ else:
 print(time.time() - start)
 print("creating model")
 
+load = False
 
-#model = LSTM_Model(h,glove,num_tags)
-model = CNN(glove ,y.size()[1],features.size()[1])
+if load:
+    model = torch.load('model.p')
+else:
+    #model = LSTM_Model(h,glove,num_tags)
 
-params = model.parameters()
+    model = CNN(glove ,y.size()[1],features.size()[1])
 
-opt = optim.Adam(list(params), lr=0.001)
+
+
+
+
+#params = model.parameters()
+
+params = model.params
+
+
+opt = optim.Adam(params, lr=0.001)
 
 bce = torch.nn.BCELoss()
 
@@ -76,6 +89,23 @@ if gpu:
 
 
 print(model)
+
+def clip_gradient(params, clip):
+
+    totalnorm = 0   
+    
+    for p in params:
+    
+        modulenorm = p.grad.data.norm(p=2)
+
+        totalnorm += modulenorm **2
+        
+
+    totalnorm = math.sqrt(totalnorm)
+        
+    #return(totalnorm)
+
+    #return min(1, args.clip / (totalnorm + 1e-6))
 
 def train():
 
@@ -102,6 +132,7 @@ def train():
 
         loss.backward()
 
+
         opt.step()
 
         avg_loss += loss
@@ -111,13 +142,23 @@ def train():
             print("averge loss: ", (avg_loss / i).data[0], " time elapsed:", time.time() - start)
             #print( "CUDA memory: "  ,sbcuda.cuda_ndarray.cuda_ndarray.mem_info()[0]/1024./1024/1024 )
 
+            #for p in params:
+            #    print(list(p.size()), (p.data **2 ).mean())# p.data.norm())
+
+
+
+
+
 def test():
 
-    model.eval()
+    #model.eval()
 
     avg_loss = 0
     avg_fscore = 0
     avg_ham = 0
+    
+    y_hat_all = np.zeros(y[train_idx :].numpy().shape)
+    i = 0
 
     for data, target in test_loader:
 
@@ -131,34 +172,32 @@ def test():
 
         loss = bce(y_hat, target)
 
-        y_hat = y_hat.cpu()
-        target = target.cpu()
+        y_hat = y_hat.cpu().data.numpy()
 
-        correct = target.data.numpy().flatten()
-        predicted = y_hat.data.numpy().flatten()
+        y_hat_all[i*data.size()[0]:(i+1)*data.size()[0]] = y_hat
 
-        precision, recall, thresholds = precision_recall_curve(correct, predicted)
-   
-        f_score = 2* precision * recall / (precision + recall)
-        
-        i_max = f_score.argmax()
-        
-        f_max = f_score[i_max]
-        
-        max_thresh  =  thresholds[i_max]
-
-        hamming = hamming_loss(y,y_hat > max_thresh)
+        i+=1
 
         avg_loss += loss
-        avg_fscore += f_max
-        avg_ham += hamming
-
-    print("averge loss: ", (avg_loss / len(test_loader)).data[0], " average f score: ", avg_fscore / len(test_loader), " average hamming loss: ", avg_ham / len(test_loader  ))
 
 
+    precision, recall, thresholds = precision_recall_curve(y[train_idx :].numpy().flatten(), y_hat_all.flatten())
+    
+    f_score = 2* precision * recall / (precision + recall)
+    i_max = np.nanargmax(f_score)
+    f_max = f_score[i_max]
+    max_thresh = thresholds[i_max]
 
-for i in range(6):
+    hamming = hamming_loss(y[train_idx :].numpy(),y_hat_all > max_thresh)
+
+    print("averge loss: ", (avg_loss / len(test_loader)).data[0], " average f score: ", f_max, " average hamming loss: ", hamming)
+    print('precision: '  , precision[i_max], 'recall: ' , recall[i_max])
+
+
+
+for i in range(20):
     train()
     test()
 
 
+torch.save(model,open('model.p','wb'))

@@ -20,12 +20,13 @@ from networks import *
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import hamming_loss
 
+np.set_printoptions(precision=2)
 #import theano.sandbox.cuda.basic_ops as sbcuda
 
 n = 20000
 seq_len = 80
-h = 128
-num_tags = 10
+h = 512
+num_tags = 100
 batch_size = 64
 
 gpu = False
@@ -35,7 +36,7 @@ start = time.time()
 glove = np.load('glove.npy')
 
 features = np.load('features.npy')
-y = np.load('y.npy')[:,0:10]
+y = np.load('y.npy')
 
 features = torch.from_numpy(features)
 y = torch.from_numpy(y).float()
@@ -45,8 +46,8 @@ glove = torch.from_numpy(glove)
 train_idx = int(np.floor(features.size()[0] * 8 / 10))
 
 train_loader = torch.utils.data.TensorDataset(features[:train_idx ], y[:train_idx ])
-#test_loader = torch.utils.data.TensorDataset(features[train_idx :], y[train_idx :])
-test_loader = torch.utils.data.TensorDataset(features[:30000], y[:30000])
+test_loader = torch.utils.data.TensorDataset(features[train_idx :], y[train_idx :])
+
 
 if not gpu:
 
@@ -66,15 +67,9 @@ load = False
 if load:
     model = torch.load('model.p')
 else:
-    #model = LSTM_Model(h,glove,num_tags)
+    model = LSTM_Model(h,glove,num_tags)
+    #model = CNN(glove ,y.size()[1],features.size()[1])
 
-    model = CNN(glove ,y.size()[1],features.size()[1])
-
-
-
-
-
-#params = model.parameters()
 
 params = model.params
 
@@ -107,7 +102,7 @@ def clip_gradient(params, clip):
 
     #return min(1, args.clip / (totalnorm + 1e-6))
 
-def train():
+def train(train_loader):
 
     model.train()
 
@@ -138,7 +133,7 @@ def train():
         avg_loss += loss
         i += 1
 
-        if i % 400 == 0:
+        if i % 700 == 0:
             print("averge loss: ", (avg_loss / i).data[0], " time elapsed:", time.time() - start)
             #print( "CUDA memory: "  ,sbcuda.cuda_ndarray.cuda_ndarray.mem_info()[0]/1024./1024/1024 )
 
@@ -149,15 +144,15 @@ def train():
 
 
 
-def test():
+def test(test_loader):
 
-    #model.eval()
+    model.eval()
 
     avg_loss = 0
-    avg_fscore = 0
-    avg_ham = 0
     
-    y_hat_all = np.zeros(y[train_idx :].numpy().shape)
+    y_hat_all = np.zeros(y[train_idx:].numpy().shape)
+    y_target = np.zeros(y[train_idx:].numpy().shape)
+
     i = 0
 
     for data, target in test_loader:
@@ -175,20 +170,24 @@ def test():
         y_hat = y_hat.cpu().data.numpy()
 
         y_hat_all[i*data.size()[0]:(i+1)*data.size()[0]] = y_hat
+        y_target[i*data.size()[0]:(i+1)*data.size()[0]] = target.data.numpy()
 
         i+=1
 
         avg_loss += loss
 
 
-    precision, recall, thresholds = precision_recall_curve(y[train_idx :].numpy().flatten(), y_hat_all.flatten())
+    #precision, recall, thresholds = precision_recall_curve(y[train_idx :].numpy().flatten(), y_hat_all.flatten())
+    precision, recall, thresholds = precision_recall_curve(y_target.flatten(), y_hat_all.flatten())
+
     
     f_score = 2* precision * recall / (precision + recall)
     i_max = np.nanargmax(f_score)
     f_max = f_score[i_max]
     max_thresh = thresholds[i_max]
 
-    hamming = hamming_loss(y[train_idx :].numpy(),y_hat_all > max_thresh)
+    #hamming = hamming_loss(y[train_idx :].numpy(),y_hat_all > max_thresh)
+    hamming = hamming_loss(y_target,y_hat_all > max_thresh)
 
     print("averge loss: ", (avg_loss / len(test_loader)).data[0], " average f score: ", f_max, " average hamming loss: ", hamming)
     print('precision: '  , precision[i_max], 'recall: ' , recall[i_max])
@@ -196,8 +195,8 @@ def test():
 
 
 for i in range(20):
-    train()
-    test()
+    
+    train(train_loader)
+    test(test_loader)
 
-
-torch.save(model,open('model.p','wb'))
+    torch.save(model,open('model.p','wb'))

@@ -92,12 +92,12 @@ def sent2seq(text, key, tok, l):
 
 
 def load_glove(vocab):
-    embedding_mat = [np.zeros(50)]
+    embedding_mat = [np.zeros(200)]
     new_vocab = {}
 
     count = 0
 
-    with open('glove.6B.50d.txt') as f:
+    with open('/home/zz1409/glove.6B.200d.txt') as f:
 
         for i, line in enumerate(f):
 
@@ -111,6 +111,6 @@ def load_glove(vocab):
                 if len(list(new_vocab.keys())) == len(list(vocab.keys())):
                     return new_vocab, np.array(embedding_mat)
 
-    embedding_mat.append(np.random.randn(50))
+    embedding_mat.append(np.random.randn(200))
 
     return new_vocab, np.array(embedding_mat).astype(np.float32())

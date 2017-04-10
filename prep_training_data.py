@@ -73,7 +73,10 @@ vocab, glove = load_glove(vocab)
 features = df['lyrics'].apply(lambda x: sent2seq(x, vocab, tok, seq_len))
 features = np.array(list(features))
 
-np.save('features.npy',features)
-np.save('y.npy',y)
+shuffle = np.random.permutation(features.shape[0])
+
+
+np.save('features.npy',features[shuffle])
+np.save('y.npy',y[shuffle])
 np.save('glove.npy',glove)
 

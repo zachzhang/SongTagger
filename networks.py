@@ -17,13 +17,12 @@ class LSTM_Model(nn.Module):
         self.embed.weight = nn.Parameter(glove )
 
         #self.lstm = nn.LSTM(glove.size()[1], h, 1, batch_first=True)
-        self.lstm = nn.GRU(glove.size()[1], h, 1, batch_first=True)
+        self.lstm = nn.GRU(glove.size()[1], h, 1, batch_first=True , dropout = .3)
 
-        self.output_layer = nn.Linear(h, num_out)
+        self.output_layer = nn.Linear(h, num_out,bias=False)
 
-        #self.params = list(self.embed.parameters()) + list(self.output_layer.parameters()) + list(self.lstm.parameters())
-        self.params =  list(self.output_layer.parameters()) + list(self.lstm.parameters())
-
+        self.params = list(self.embed.parameters()) + list(self.output_layer.parameters()) + list(self.lstm.parameters())
+        #self.params =  list(self.output_layer.parameters()) + list(self.lstm.parameters())
 
 
     def forward(self,x):
@@ -33,11 +32,7 @@ class LSTM_Model(nn.Module):
 
         E = self.embed(x)
         
-
-
-        #z = self.lstm(E, (h0, c0))[0][:, -1, :]
         z = self.lstm(E, h0)[0][:, -1, :]
-
 
         y_hat = F.sigmoid(self.output_layer(z))
 

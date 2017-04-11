@@ -69,9 +69,15 @@ load = False
 if load:
     model = torch.load('model.p')
 else:
-    model = LSTM_Model(h,glove,num_tags)
+    #model = LSTM_Model(h,glove,num_tags)
     #model = CNN(glove ,y.size()[1],features.size()[1])
 
+    bidir = False
+    pool = False
+
+    print(bidir,pool)
+
+    model = BiConvGRU( h = 256,conv_feat=200, glove = glove, num_out = num_tags,bidirectional = bidir , pooling = pool)
 
 params = model.params
 
@@ -86,23 +92,6 @@ if gpu:
 
 
 print(model)
-
-def clip_gradient(params, clip):
-
-    totalnorm = 0   
-    
-    for p in params:
-    
-        modulenorm = p.grad.data.norm(p=2)
-
-        totalnorm += modulenorm **2
-        
-
-    totalnorm = math.sqrt(totalnorm)
-        
-    #return(totalnorm)
-
-    #return min(1, args.clip / (totalnorm + 1e-6))
 
 def train(train_loader):
 

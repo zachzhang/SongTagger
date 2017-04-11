@@ -41,7 +41,7 @@ class LSTM_Model(nn.Module):
 
 class BiConvGRU(nn.Module):
 
-    def __init__(self, h, glove, num_out,bidirectional = False , pooling = False):
+    def __init__(self, h,conv_feat ,  glove, num_out,bidirectional = False , pooling = False):
 
         super(BiConvGRU, self).__init__()
 
@@ -49,7 +49,7 @@ class BiConvGRU(nn.Module):
         self.bidirectional = bidirectional
 
         self.h = h
-        self.conv_features = 100
+        self.conv_features = conv_feat
         self.embed = nn.Embedding(glove.size()[0], glove.size()[1], padding_idx=0)
         self.embed.weight = nn.Parameter(glove)
 
@@ -64,7 +64,8 @@ class BiConvGRU(nn.Module):
         else:
             self.output_layer = nn.Linear(h ,  num_out, bias=False)
 
-        self.params = list(self.embed.parameters()) + list(self.output_layer.parameters()) + list(self.lstm.parameters())
+        self.params = list(self.embed.parameters()) + list(self.output_layer.parameters()) + list(self.lstm.parameters()) + list(self.conv.parameters())
+
 
     def forward(self, x):
 

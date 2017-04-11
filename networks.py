@@ -39,6 +39,61 @@ class LSTM_Model(nn.Module):
         return y_hat
 
 
+class BiConvGRU(nn.Module):
+
+    def __init__(self, h, glove, num_out,bidirectional = False , pooling = False):
+
+        super(BiConvGRU, self).__init__()
+
+        self.use_pool = pooling
+        self.bidirectional = bidirectional
+
+        self.h = h
+        self.conv_features = 100
+        self.embed = nn.Embedding(glove.size()[0], glove.size()[1], padding_idx=0)
+        self.embed.weight = nn.Parameter(glove)
+
+        self.conv = nn.Conv1d(in_channels= glove.size()[1], out_channels=self.conv_features, kernel_size=3)
+
+        self.pool = nn.MaxPool1d(2)
+
+        self.lstm = nn.GRU(self.conv_features, h, 1 , bidirectional = bidirectional, batch_first=True, dropout=.3)
+
+        if bidirectional:
+            self.output_layer = nn.Linear(h*2, num_out, bias=False)
+        else:
+            self.output_layer = nn.Linear(h ,  num_out, bias=False)
+
+        self.params = list(self.embed.parameters()) + list(self.output_layer.parameters()) + list(self.lstm.parameters())
+
+    def forward(self, x):
+
+        E = self.embed(x)
+        E = E.transpose(1, 2).contiguous()
+
+        h = F.relu(self.conv(E))
+
+        h = self.pool(h)
+
+        h = h.transpose(1, 2).contiguous()
+
+        if self.bidirectional:
+            h0 = Variable(torch.zeros(2, x.size()[0], self.h))
+        else:
+            h0 = Variable(torch.zeros(1, x.size()[0], self.h))
+
+        z = self.lstm(h, h0)[1]
+
+        if self.bidirectional:
+            z = z.transpose(0,1).contiguous().view(-1,2*self.h)
+        else:
+            z = z.transpose(0, 1).contiguous().view(-1, self.h)
+
+        y_hat = F.sigmoid(self.output_layer(z))
+
+        return y_hat
+
+
 class CNN(nn.Module):
 
     def __init__(self,glove,num_out,seq_len):
@@ -118,3 +173,4 @@ class CNN(nn.Module):
         h = h.view(-1,self.flat_dim)
 
         return F.sigmoid(self.output_layer(h))
+

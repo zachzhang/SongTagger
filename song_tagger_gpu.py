@@ -64,6 +64,8 @@ print("creating model")
 
 load = False
 
+
+
 if load:
     model = torch.load('model.p')
 else:

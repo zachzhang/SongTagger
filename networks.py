@@ -180,6 +180,67 @@ class CNN(nn.Module):
 
         return F.sigmoid(self.output_layer(h))
 
+class GRU_Attention(nn.Module):
+
+    def __init__(self, h, conv_feat, glove, num_out, bidirectional=False):
+
+        super(GRU_Attention, self).__init__()
+
+        self.bidirectional = bidirectional
+
+        self.h = h
+        self.conv_features = conv_feat
+        self.embed = nn.Embedding(glove.size()[0], glove.size()[1], padding_idx=0)
+        self.embed.weight = nn.Parameter(glove)
+
+        self.conv = nn.Conv1d(in_channels=glove.size()[1], out_channels=self.conv_features, kernel_size=3)
+
+        self.lstm = nn.GRU(self.conv_features, h, 1, bidirectional=bidirectional, batch_first=True, dropout=.3)
+
+        self.num_dir = 2 if bidirectional else 1
+
+        self.output_layer = nn.Linear(h * self.num_dir, num_out, bias=False)
+
+        self.U = nn.Conv1d(in_channels=h * self.num_dir, out_channels=h * self.num_dir , kernel_size=1)
+
+        self.u_a = nn.Parameter(torch.randn(1,1,h * self.num_dir))
+
+        self.params = list(self.embed.parameters()) + list(self.output_layer.parameters()) + list(
+            self.lstm.parameters()) + list(self.conv.parameters())
+
+
+    def forward(self, x):
+
+        h0 = Variable(torch.zeros(self.num_dir, x.size()[0], self.h))
+
+        #embedding layer
+        E = self.embed(x)
+        E = E.transpose(1, 2).contiguous()
+
+        #conv layer
+        h = F.relu(self.conv(E))
+        h = h.transpose(1, 2).contiguous()
+
+        #Bidir GRU
+        z = self.lstm(h, h0)[0].transpose(1, 2).contiguous()
+
+        #soft attention
+        u_t = F.tanh(self.U(z))
+        a_t = torch.bmm( self.u_a.expand(x.size()[0],1, self.num_dir * self.h), u_t)
+        a_t = F.softmax(a_t.squeeze(1)).unsqueeze(2)
+
+        #representation
+        s = torch.bmm(z , a_t).squeeze(2)
+
+        #output
+        y_hat = F.sigmoid(self.output_layer(s))
+
+        return y_hat
+
+
+model = GRU_Attention(h=128, conv_feat=100, glove=torch.randn(10000,100), num_out=100, bidirectional=True)
+
+print(model(Variable(torch.ones(64, 100)).long()).size())
 
 #model = BiConvGRU( h = 256,conv_feat=200, glove = torch.randn(10000,100), num_out = 100,bidirectional = False , pooling = False)
 

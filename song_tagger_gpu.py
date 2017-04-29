@@ -25,10 +25,11 @@ np.set_printoptions(precision=2)
 
 n = 20000
 seq_len = 80
-h = 512
+h = 256
 num_tags = 100
 batch_size = 64
 
+print(h)
 gpu = False
 
 print("loading data")
@@ -74,10 +75,8 @@ else:
 
     bidir = False
     pool = False
-
-    print(bidir,pool)
-
-    model = BiConvGRU( h = 256,conv_feat=200, glove = glove, num_out = num_tags,bidirectional = bidir , pooling = pool)
+    #print(bidir,pool)
+    model = BiConvGRU( h = 512,conv_feat=200, glove = glove, num_out = num_tags,bidirectional = bidir , pooling = pool)
 
 params = model.params
 

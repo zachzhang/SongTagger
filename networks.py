@@ -17,7 +17,7 @@ class LSTM_Model(nn.Module):
         self.embed.weight = nn.Parameter(glove )
 
         #self.lstm = nn.LSTM(glove.size()[1], h, 1, batch_first=True)
-        self.lstm = nn.GRU(glove.size()[1], h, 1, batch_first=True , dropout = .3)
+        self.lstm = nn.GRU(glove.size()[1], h, 1, batch_first=True , dropout = .3, bidirectional = True)
 
         self.output_layer = nn.Linear(h, num_out,bias=False)
 
@@ -32,7 +32,11 @@ class LSTM_Model(nn.Module):
 
         E = self.embed(x)
         
-        z = self.lstm(E, h0)[0][:, -1, :]
+        #z = self.lstm(E, h0)[0][:, -1, :]
+
+        z = self.lstm(E, h0)[1]
+
+        z = z.transpose(0,1).contiguous().view(-1,2*self.h)
 
         y_hat = F.sigmoid(self.output_layer(z))
 
@@ -74,7 +78,8 @@ class BiConvGRU(nn.Module):
 
         h = F.relu(self.conv(E))
 
-        h = self.pool(h)
+        if self.use_pool:
+            h = self.pool(h)
 
         h = h.transpose(1, 2).contiguous()
 
@@ -175,3 +180,8 @@ class CNN(nn.Module):
 
         return F.sigmoid(self.output_layer(h))
 
+
+#model = BiConvGRU( h = 256,conv_feat=200, glove = torch.randn(10000,100), num_out = 100,bidirectional = False , pooling = False)
+
+
+#print(model(Variable(torch.ones(32,20)).long() ).size())

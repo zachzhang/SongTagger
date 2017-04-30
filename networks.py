@@ -17,7 +17,7 @@ class LSTM_Model(nn.Module):
         self.embed.weight = nn.Parameter(glove )
 
         #self.lstm = nn.LSTM(glove.size()[1], h, 1, batch_first=True)
-        self.lstm = nn.GRU(glove.size()[1], h, 1, batch_first=True , dropout = .3, bidirectional = True)
+        self.lstm = nn.GRU(glove.size()[1], h, 1, batch_first=True , dropout = .5)
 
         self.output_layer = nn.Linear(h, num_out,bias=False)
 
@@ -28,15 +28,13 @@ class LSTM_Model(nn.Module):
     def forward(self,x):
 
         h0 = Variable(torch.zeros(1, x.size()[0], self.h))
-        c0 = Variable(torch.zeros(1, x.size()[0], self.h))
 
         E = self.embed(x)
         
-        #z = self.lstm(E, h0)[0][:, -1, :]
+        z = self.lstm(E, h0)[0][:, -1, :]
 
-        z = self.lstm(E, h0)[1]
-
-        z = z.transpose(0,1).contiguous().view(-1,2*self.h)
+        #z = self.lstm(E, h0)[1]
+        #z = z.transpose(0,1).contiguous().view(-1,2*self.h)
 
         y_hat = F.sigmoid(self.output_layer(z))
 
@@ -206,7 +204,7 @@ class GRU_Attention(nn.Module):
         self.u_a = nn.Parameter(torch.randn(1,1,h * self.num_dir))
 
         self.params = list(self.embed.parameters()) + list(self.output_layer.parameters()) + list(
-            self.lstm.parameters()) + list(self.conv.parameters())
+            self.lstm.parameters()) + list(self.conv.parameters()) + list(self.U.parameters()) + [self.u_a]
 
 
     def forward(self, x):

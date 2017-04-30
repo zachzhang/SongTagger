@@ -23,9 +23,9 @@ from sklearn.metrics import hamming_loss
 np.set_printoptions(precision=2)
 #import theano.sandbox.cuda.basic_ops as sbcuda
 
-n = 20000
-seq_len = 80
-h = 256
+n = 30000
+seq_len = 120
+h = 128
 num_tags = 100
 batch_size = 64
 
@@ -70,16 +70,17 @@ load = False
 if load:
     model = torch.load('model.p')
 else:
-    #model = LSTM_Model(h,glove,num_tags)
+
+    model = LSTM_Model(h,glove,num_tags)
     #model = CNN(glove ,y.size()[1],features.size()[1])
 
     bidir = False
     pool = False
-    #print(bidir,pool)
-    model = BiConvGRU( h = 512,conv_feat=200, glove = glove, num_out = num_tags,bidirectional = bidir , pooling = pool)
+    
+    #model = BiConvGRU( h = 512,conv_feat=200, glove = glove, num_out = num_tags,bidirectional = bidir , pooling = pool)
+    #model = GRU_Attention( h = 512,conv_feat=200, glove = glove, num_out = num_tags,bidirectional = True  )
 
 params = model.params
-
 
 opt = optim.Adam(params, lr=0.001)
 
@@ -184,7 +185,7 @@ def test(test_loader):
 
 
 
-for i in range(20):
+for i in range(5):
     
     train(train_loader)
     test(test_loader)

@@ -18,8 +18,8 @@ import time
 import sys
 from utils import *
 
-n = 20000
-seq_len = 80
+n = 30000
+seq_len = 120
 h = 128
 num_tags = 100
 batch_size = 64
@@ -39,6 +39,7 @@ df[df['lyrics'] == bad_song] = ''
 # only take the ones that we have data for
 df.fillna('', inplace=True)
 df = df[df['lyrics'] != '']
+df = df.drop_duplicates(['artist','song'])
 
 # List of list of tags for each example
 tags = [clean_tags(raw) for raw in list(df['tags'])]

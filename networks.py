@@ -158,9 +158,7 @@ class CNN(nn.Module):
 
         return(h.size()[1] * h.size()[2])
 
-
-    def forward(self,x):
-
+    def forward(self, x):
         E = self.embed(x)
 
         E = E.transpose(1, 2).contiguous()
@@ -174,9 +172,51 @@ class CNN(nn.Module):
         h = F.relu(self.bn5(self.conv5(h)))
         h = self.pool3(h)
 
-        h = h.view(-1,self.flat_dim)
+        h = h.view(-1, self.flat_dim)
 
         return F.sigmoid(self.output_layer(h))
+
+class CNN2(nn.Module):
+    def __init__(self, glove, num_out, seq_len):
+        super(CNN2, self).__init__()
+
+        self.seq_len = seq_len
+        self.NB_FILTER = 256
+        self.embed = nn.Embedding(glove.size()[0], glove.size()[1], padding_idx=0)
+        self.embed.weight = nn.Parameter(glove)
+
+        self.ngrams = [ 1,2,3,4,5]
+
+        self.conv_layers = []
+
+        for i in self.ngrams:
+            conv = nn.Sequential(
+                nn.Conv1d(in_channels=glove.size()[1], out_channels=self.NB_FILTER, kernel_size=i),
+                nn.BatchNorm1d(self.NB_FILTER),
+                nn.ReLU(),
+                nn.Dropout(p=.5)
+            )
+
+            self.conv_layers.append(conv)
+
+        self.output_layer = nn.Linear( len(self.ngrams) * self.NB_FILTER, num_out, bias=False)
+
+        #self.params = self.parameters()
+
+    def forward(self,x):
+
+        E = self.embed(x)
+        E = E.transpose(1, 2).contiguous()
+
+        conv_h = [  conv(E).max(2)[0] for conv in self.conv_layers]
+
+        h = torch.cat(conv_h,2)
+        h = h.view( -1,len(self.ngrams) * self.NB_FILTER )
+
+        y_hat = self.output_layer(h)
+
+        return(y_hat)
+
 
 class GRU_Attention(nn.Module):
 
@@ -236,9 +276,11 @@ class GRU_Attention(nn.Module):
         return y_hat
 
 
-model = GRU_Attention(h=128, conv_feat=100, glove=torch.randn(10000,100), num_out=100, bidirectional=True)
+#model = GRU_Attention(h=128, conv_feat=100, glove=torch.randn(10000,100), num_out=100, bidirectional=True)
 
-print(model(Variable(torch.ones(64, 100)).long()).size())
+
+model = CNN2( glove=torch.randn(10000,200),num_out=100,seq_len = 50)
+print(model(Variable(torch.ones(64, 50)).long()).size())
 
 #model = BiConvGRU( h = 256,conv_feat=200, glove = torch.randn(10000,100), num_out = 100,bidirectional = False , pooling = False)
 
